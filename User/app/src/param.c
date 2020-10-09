@@ -34,7 +34,6 @@ void LoadCalibParam(void);
 */
 void LoadParam(void)
 {
-
     /* 读取EEPROM中的参数 */
     ee_ReadBytes((uint8_t *)&g_tParam, PARAM_ADDR, sizeof(PARAM_T));
 
@@ -148,8 +147,13 @@ void InitBaseParam(void)
     
     g_tParam.FileListFont24 = 0;        /* 1表示24点阵显示文件列表，0表示16点阵 */
     
-    g_tParam.ResetType = 0;             /* ARM芯片复位模式 */
+    g_tParam.ResetTypeNotUsed = 0;      /* ARM芯片复位模式 [废弃] */
     g_tParam.MultiProgMode = 4;         /* 多机烧录模式 */
+    
+	g_tParam.FactoryId = 1;				/* 工厂代码 */
+    g_tParam.ToolSn = 1;                /* 烧录器编号 */
+    
+    g_tParam.StartRun = 0;              /* 开机启动 */
     
     SaveParam();
 }

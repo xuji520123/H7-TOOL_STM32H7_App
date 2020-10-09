@@ -61,10 +61,15 @@ typedef struct {
     uint32_t xpsr;
 } DEBUG_STATE;
 
+
+extern SWD_CONNECT_TYPE reset_connect;
+extern const char * swd_arm_core_info(uint32_t cpuid);
 //static SWD_CONNECT_TYPE reset_connect = CONNECT_NORMAL;
 
 static DAP_STATE dap_state;
 static uint32_t  soft_reset = SYSRESETREQ;
+
+static uint8_t s_reset_state = 0;
 
 /*
     判断ACK = DAP_TRANSFER_OK
@@ -107,16 +112,25 @@ void MUL_swd_set_target_reset(uint8_t asserted)
 //		swd_write_word((uint32_t)&SCB->AIRCR, ((0x5FA << SCB_AIRCR_VECTKEY_Pos) |(SCB->AIRCR & SCB_AIRCR_PRIGROUP_Msk) | SCB_AIRCR_SYSRESETREQ_Msk));
 //	}   
 //    
-    if (asserted == 0)
+    if (asserted)
     {
-        EIO_SetOutLevel(EIO_D0, 0);     /* 转接板NRESET 反相 */
+        s_reset_state = 1;        
+//        printf("reset gpio = %d\r\n", 0);
+        EIO_SetOutLevel(EIO_D0, 1);        
     }
     else
     {
-        EIO_SetOutLevel(EIO_D0, 1);
+        s_reset_state = 0;
+//        printf("reset gpio = %d\r\n", 1);        
+        EIO_SetOutLevel(EIO_D0, 0);     /* 转接板NRESET 反相 */
     }
 }
 #endif
+
+uint8_t MUL_swd_get_target_reset(void)
+{    
+    return s_reset_state;
+}
 
 uint32_t MUL_target_get_apsel()
 {
@@ -170,7 +184,7 @@ uint8_t *MUL_swd_transfer_retry(uint32_t req, uint32_t *data)
     static uint8_t  ret_ack[4];
     uint32_t done = 0;
     uint8_t i;
-    uint8_t err_cout[4];
+    uint16_t err_cout[4];
 
     /* */
     for (i = 0; i < 4; i++)
@@ -241,17 +255,25 @@ void MUL_swd_set_soft_reset(uint32_t soft_reset_type)
 
 uint8_t MUL_swd_init(void)
 {
+    static uint8_t s_first_run = 0;
+    
     //TODO - DAP_Setup puts GPIO pins in a hi-z state which can
     //       cause problems on re-init.  This needs to be investigated
     //       and fixed.
     DAP_Setup();
-    PORT_SWD_SETUP();
     
-    if (g_gMulSwd.MultiMode > 0)   /* 多路模式 */
+    
+    //    Set SWCLK HIGH
+    //    Set SWDIO HIGH
+    //    Set RESET LOW  转接板有反相器三极管
+    MUL_PORT_SWD_SETUP();
+
+    if (s_first_run == 0)
     {
-        MUL_SWD_GPIOConfig();
-        MUL_RefreshGpioParam();
+        s_first_run = 1;
+        EIO_SetOutLevel(0, 0);    /* D0输出0V, 转接板RESET输出高 */    
     }
+    
     return 1;
 }
 
@@ -483,7 +505,7 @@ static uint8_t MUL_swd_write_block(uint32_t address, uint8_t *data, uint32_t siz
 
 // Read 32-bit word aligned values from target memory using address auto-increment.
 // size is in bytes.
-static uint8_t MUL_swd_read_block(uint32_t address, uint32_t *p1,uint32_t *p2,uint32_t *p3,uint32_t *p4, uint32_t size)
+static uint8_t MUL_swd_read_block(uint32_t address, uint8_t *p1,uint8_t *p2,uint8_t *p3,uint8_t *p4, uint32_t size)
 {
     uint8_t tmp_in[4], req, ack;
     uint8_t *pAck;
@@ -550,10 +572,25 @@ static uint8_t MUL_swd_read_block(uint32_t address, uint32_t *p1,uint32_t *p2,ui
             return 0;
         }
 
-        *p1++ = buf32[0];
-        *p2++ = buf32[1];
-        *p3++ = buf32[2];
-        *p4++ = buf32[3];
+        *p1++ = buf32[0];            
+        *p1++ = buf32[0]>>8;
+        *p1++ = buf32[0]>>16;
+        *p1++ = buf32[0]>>24;
+
+        *p2++ = buf32[1];            
+        *p2++ = buf32[1]>>8;
+        *p2++ = buf32[1]>>16;
+        *p2++ = buf32[1]>>24;
+
+        *p3++ = buf32[2];            
+        *p3++ = buf32[2]>>8;
+        *p3++ = buf32[2]>>16;
+        *p3++ = buf32[2]>>24;
+
+        *p4++ = buf32[3];            
+        *p4++ = buf32[3]>>8;
+        *p4++ = buf32[3]>>16;
+        *p4++ = buf32[3]>>24;        
     }
 
     // read last word
@@ -563,10 +600,29 @@ static uint8_t MUL_swd_read_block(uint32_t address, uint32_t *p1,uint32_t *p2,ui
     {
         ack = DAP_TRANSFER_OK;
 
-        *p1++ = buf32[0];
-        *p2++ = buf32[1];
-        *p3++ = buf32[2];
-        *p4++ = buf32[3];        
+        //        *p1++ = buf32[0];     错误用法，如果地址非4字节整数倍，则会产生内存访问异常
+        //        *p2++ = buf32[1];
+        //        *p3++ = buf32[2];
+        //        *p4++ = buf32[3]; 
+        *p1++ = buf32[0];            
+        *p1++ = buf32[0]>>8;
+        *p1++ = buf32[0]>>16;
+        *p1++ = buf32[0]>>24;
+
+        *p2++ = buf32[1];            
+        *p2++ = buf32[1]>>8;
+        *p2++ = buf32[1]>>16;
+        *p2++ = buf32[1]>>24;
+
+        *p3++ = buf32[2];            
+        *p3++ = buf32[2]>>8;
+        *p3++ = buf32[2]>>16;
+        *p3++ = buf32[2]>>24;
+
+        *p4++ = buf32[3];            
+        *p4++ = buf32[3]>>8;
+        *p4++ = buf32[3]>>16;
+        *p4++ = buf32[3]>>24;         
     } 
     else
     {
@@ -803,7 +859,7 @@ uint8_t MUL_swd_read_memory(uint32_t address, uint8_t *data, uint32_t size)
             n = size & 0xFFFFFFFC; // Only count complete words remaining
         }
 
-        if (!MUL_swd_read_block(address, (uint32_t *)p1, (uint32_t *)p2, (uint32_t *)p3, (uint32_t *)p4, n)) {
+        if (!MUL_swd_read_block(address, p1, p2, p3, p4, n)) {
             return 0;
         }
 
@@ -1092,6 +1148,7 @@ static uint8_t MUL_swd_wait_until_halted(void)
     int32_t time1;
     int32_t addtime = 0;
     int32_t tt0 = 0;
+    uint8_t ok[4] ={0};
     
     time1 = bsp_GetRunTime();
     
@@ -1112,7 +1169,19 @@ static uint8_t MUL_swd_wait_until_halted(void)
                 tt0 = tt;
                 if (tt > g_tProg.FLMFuncTimeout + addtime)
                 {
+                    uint8_t i;
+                    
                     printf("error : swd_wait_until_halted() timeout\r\n");
+                    for (i = 0; i < 4; i++)
+                    {
+                        if (g_gMulSwd.Active[i] == 1)
+                        {                    
+                            if (ok[i] == 0)
+                            {
+                                g_gMulSwd.Error[i] = 1;                                
+                            }
+                        }
+                    }                    
                     break;      /* 超时退出 */
                 }
                 else
@@ -1140,14 +1209,19 @@ static uint8_t MUL_swd_wait_until_halted(void)
             uint8_t err = 0;
             uint8_t i;
             
+            /* 只要有1个没有停机则继续等待 */
             for (i = 0; i < 4; i++)
             {
                 if (g_gMulSwd.Active[i] == 1)
-                {
+                {                    
                     if ((val[i] & S_HALT) == 0)
                     {
                         err = 1;
                         break;
+                    }
+                    else
+                    {
+                        ok[i] = 1;
                     }
                 }
             }
@@ -1349,10 +1423,66 @@ static uint8_t MUL_JTAG2SWD()
         return 0;
     }
 
+    /* 旧协议，J-LINK如此发送 */
+    if (!MUL_swd_switch(0xEDB6)) {
+        return 0;
+    }
+    
+    if (!MUL_swd_reset()) {
+        return 0;
+    }
+    
     if (!MUL_swd_read_idcode(tmp)) {
         return 0;
     }
 
+    return 1;
+}
+
+static uint8_t MUL_JTAG2SWD_2(uint32_t *tmp)
+{
+    tmp[0] = 0;
+    tmp[1] = 0;
+    tmp[2] = 0;
+    tmp[3] = 0;
+    
+    if (!MUL_swd_reset()) {
+        return 0;
+    }
+
+    if (!MUL_swd_switch(0xE79E)) {
+        return 0;
+    }
+
+    if (!MUL_swd_reset()) {
+        return 0;
+    }
+
+    /* 旧协议，J-LINK如此发送 */
+    if (!MUL_swd_switch(0xEDB6)) {
+        return 0;
+    }
+    
+    if (!MUL_swd_reset()) {
+        return 0;
+    }
+    
+    if (!MUL_swd_read_idcode(tmp)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+// 检测SWD，用于判断芯片是否移除. 只检测一次 
+uint8_t MUL_swd_detect_core(uint32_t *_id)
+{
+    MUL_swd_init();
+        
+    if (!MUL_JTAG2SWD_2(_id)) 
+    {
+        return 0;
+    }
     return 1;
 }
 
@@ -1386,30 +1516,28 @@ uint8_t MUL_swd_init_debug(void)
     g_gMulSwd.CoreID[2] = 0;
     g_gMulSwd.CoreID[3] = 0;
     do {
-        if (do_abort) {
+        if (do_abort != 0) 
+        {
             //do an abort on stale target, then reset the device
             MUL_swd_write_dp(DP_ABORT, DAPABORT);
+            
             MUL_swd_set_target_reset(1);
             osDelay(20);
             MUL_swd_set_target_reset(0);
-            osDelay(20);
+            osDelay(g_tProg.SwdResetDelay);
             do_abort = 0;
         }
         
         MUL_swd_init();
-        
-#if 0    // armfly debug        
-        // call a target dependant function
-        // this function can do several stuff before really
-        // initing the debug
-        if (g_target_family && g_target_family->target_before_init_debug) {
-            g_target_family->target_before_init_debug();
-        }
-#endif
-        
-        if (!MUL_JTAG2SWD()) {
-            do_abort = 1;
-            continue;
+
+        if (!MUL_JTAG2SWD()) 
+        {
+            osDelay(2);   //调试RT1052 需要再次访问
+            if (!MUL_JTAG2SWD())
+            {
+                do_abort = 1;
+                continue;
+            }
         }
 
         {
@@ -1428,43 +1556,28 @@ uint8_t MUL_swd_init_debug(void)
             
             if (err == 1)
             {
-                do_abort = 1;
+                do_abort = 2;
                 continue;      
             }
         }
         
         if (!MUL_swd_clear_errors()) {
-            do_abort = 1;
+            do_abort = 2;
             continue;
         }
 
         if (!MUL_swd_write_dp(DP_SELECT, 0)) {
-            do_abort = 1;
+            do_abort = 3;
             continue;
             
         }
         
         // Power up
         if (!MUL_swd_write_dp(DP_CTRL_STAT, CSYSPWRUPREQ | CDBGPWRUPREQ)) {
-            do_abort = 1;
+            do_abort = 4;
             continue;
         }
-
-//        for (i = 0; i < timeout; i++) {
-//            if (!swd_read_dp(DP_CTRL_STAT, &tmp)) {
-//                do_abort = 1;
-//                break;
-//            }
-//            if ((tmp & (CDBGPWRUPACK | CSYSPWRUPACK)) == (CDBGPWRUPACK | CSYSPWRUPACK)) {
-//                // Break from loop if powerup is complete
-//                break;
-//            }
-//        }
-//        if ((i == timeout) || (do_abort == 1)) {
-//            // Unable to powerup DP
-//            do_abort = 1;
-//            continue;
-//        }        
+       
         {
             uint8_t k;
             uint8_t done = 0;
@@ -1475,7 +1588,6 @@ uint8_t MUL_swd_init_debug(void)
                 pAck = MUL_swd_read_dp(DP_CTRL_STAT, tmp);            
                 for (k = 0; k < 4; k++)
                 {
-                    //if (g_gMulSwd.Active[i] == 0 || g_gMulSwd.Error[i] == 1)       /* 通道未激活 */
                     if (g_gMulSwd.Active[i] == 0)       /* 通道未激活 */
                     {
                         done |= (1 << k);
@@ -1511,7 +1623,7 @@ uint8_t MUL_swd_init_debug(void)
         }
         
         if (!MUL_swd_write_dp(DP_CTRL_STAT, CSYSPWRUPREQ | CDBGPWRUPREQ | TRNNORMAL | MASKLANE)) {
-            do_abort = 1;
+            do_abort = 7;
             continue;
         }
 
@@ -1525,10 +1637,10 @@ uint8_t MUL_swd_init_debug(void)
 #endif
         
         if (!MUL_swd_write_dp(DP_SELECT, 0)) {
-            do_abort = 1;
+            do_abort = 8;
             continue;
         }
-        
+
         return 1;
     
     } while (--retries > 0);
@@ -1571,11 +1683,11 @@ uint8_t MUL_swd_set_target_state_hw(TARGET_RESET_STATE state)
                         continue;
                     }
                     
-//                    if (reset_connect == CONNECT_UNDER_RESET) {
-//                        // Assert reset
-//                        MUL_swd_set_target_reset(1); 
-//                        osDelay(20);
-//                    }
+                    if (reset_connect == CONNECT_UNDER_RESET) {
+                        // Assert reset
+                        MUL_swd_set_target_reset(1); 
+                        osDelay(20);
+                    }
 
                     // Enable debug
                     while(MUL_swd_write_word(DBG_HCSR, DBGKEY | C_DEBUGEN) == 0) {
@@ -1594,11 +1706,11 @@ uint8_t MUL_swd_set_target_state_hw(TARGET_RESET_STATE state)
                         continue;
                     }
                     
-//                    if (reset_connect == CONNECT_NORMAL) {
+                    if (reset_connect == CONNECT_NORMAL) {
                         // Assert reset
                         MUL_swd_set_target_reset(1); 
                         osDelay(20);
-//                    }
+                    }
                     
                     // Deassert reset
                     MUL_swd_set_target_reset(0);
@@ -1952,5 +2064,379 @@ uint8_t MUL_swd_set_target_state_sw(TARGET_RESET_STATE state)
     }
 
     return 1;
+}
+
+/*
+*********************************************************************************************************
+*    函 数 名: swd_enter_debug_program
+*    功能说明: 让芯片进入debug状态。 整合了 swd_init_debug()、 swd_set_target_state_sw、
+*           swd_set_target_state_hw()几个函数，增加了各种MCU的异常处理
+*    形    参: 无
+*    返 回 值: 无
+*********************************************************************************************************
+*/
+extern uint8_t swd_freeze_dog(void);
+uint8_t MUL_swd_enter_debug_program(void)
+{
+    uint32_t val[4];
+    uint32_t i;
+    uint8_t ResetMode;
+    
+    /* --0:自动模式,  1:软件模式  2:硬件UnderReset */   
+    ResetMode = g_tProg.ResetMode;
+    
+    /* 自动模式暂未实现 */
+    if (ResetMode == 0)
+    {
+        ResetMode = 1;
+    }   
+    
+    /* 软件复位 */
+    if (ResetMode == 1)
+    {
+        if (!MUL_swd_init_debug()) {
+            return 0;
+        }
+
+        if (swd_freeze_dog() == 0)      /* 如果冻结看门狗时钟失败（STM32H7）*/
+        {
+            if (swd_freeze_dog() == 0) 
+            {
+                /* 失败 */;
+            }   
+        }
+        
+        // Enable debug and halt the core (DHCSR <- 0xA05F0003)
+        for (i = 0; i < 5; i++)
+        {
+            if (MUL_swd_write_word(DBG_HCSR, DBGKEY | C_DEBUGEN | C_HALT) != 0)
+            {
+                break;
+            }
+            
+            // Target is in invalid state?
+            MUL_swd_set_target_reset(1);
+            osDelay(20);
+            MUL_swd_set_target_reset(0);
+            osDelay(i * 5);
+        }
+
+        // Wait until core is halted
+        for (i = 0; i < 500; i++)
+        {
+            uint8_t err;
+            
+            if (!MUL_swd_read_word(DBG_HCSR, val)) 
+            {
+                return 0;
+            }
+            
+            err = 0;
+            if (g_gMulSwd.Active[0] == 1 && ((val[0] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[1] == 1 && ((val[1] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[2] == 1 && ((val[2] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[3] == 1 && ((val[3] & S_HALT) == 0))
+            {
+                err = 1;
+            }   
+            if (err == 0)
+            {
+                break;
+            }
+            
+            bsp_DelayUS(100);
+        }
+
+        // Enable halt on reset
+        if (!MUL_swd_write_word(DBG_EMCR, VC_CORERESET)) {
+            return 0;
+        }
+
+        // Perform a soft reset
+        if (!MUL_swd_read_word(NVIC_AIRCR, val)) {
+            return 0;
+        }
+
+        if (!MUL_swd_write_word(NVIC_AIRCR, VECTKEY | (val[0] & SCB_AIRCR_PRIGROUP_Msk) | soft_reset)) {
+            return 0;
+        }
+
+        osDelay(2);
+
+        for (i = 0; i < 500; i++)
+        {
+            uint8_t err;
+            
+            if (!MUL_swd_read_word(DBG_HCSR, val)) 
+            {
+                return 0;
+            }
+            
+            err = 0;
+            if (g_gMulSwd.Active[0] == 1 && ((val[0] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[1] == 1 && ((val[1] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[2] == 1 && ((val[2] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[3] == 1 && ((val[3] & S_HALT) == 0))
+            {
+                err = 1;
+            }   
+            if (err == 0)
+            {
+                break;
+            }
+            
+            bsp_DelayUS(100);
+        }
+        // Disable halt on reset
+        if (!MUL_swd_write_word(DBG_EMCR, 0)) {
+            return 0;
+        }
+        
+        /* 解锁后重读 NVIC_CPUID */
+        {
+            uint32_t cpuid[4];
+            
+            /* NVIC_CPUID = 0xE000ED00 */
+            if (!MUL_swd_read_word(NVIC_CPUID, cpuid))
+            {
+                printf(".MUL_swd_read_word(NVIC_CPUID, cpuid) error\r\n");
+                return 0;             
+            }
+            
+            if (g_gMulSwd.MultiMode >= 1)
+            {
+                printf(".NVIC_CPUID1 = %08X, %s\r\n", cpuid[0], swd_arm_core_info(cpuid[0]));
+            }
+            if (g_gMulSwd.MultiMode >= 2)
+            {
+                printf(".NVIC_CPUID2 = %08X, %s\r\n", cpuid[1], swd_arm_core_info(cpuid[1]));
+            }
+            if (g_gMulSwd.MultiMode >= 3)
+            {
+                printf(".NVIC_CPUID3 = %08X, %s\r\n", cpuid[2], swd_arm_core_info(cpuid[2]));
+            }
+            if (g_gMulSwd.MultiMode >= 4)
+            {                
+                printf(".NVIC_CPUID4 = %08X, %s\r\n", cpuid[3], swd_arm_core_info(cpuid[3]));
+            }
+            {
+                uint8_t err = 0;
+                
+                for (i = 0; i < 4; i++)
+                {
+                    if (g_gMulSwd.Active[i] == 1)
+                    {
+                        if ((cpuid[i] & 0xFF000000) != 0x41000000)
+                        {
+                            err = 1;
+                        }
+                    }
+                }
+                
+                if (err == 1)
+                {
+                    ;
+                }
+            }
+        }   
+        
+        return 1;
+    }    
+        
+    /* 硬件复位 */
+    if (ResetMode == 2)
+    {
+        /* 进入编程状态，先复位一次，应对已看门狗低功耗程序的片子 */
+        MUL_swd_set_target_reset(1);
+        osDelay(10);
+        MUL_swd_set_target_reset(0);
+        
+        if (MUL_swd_init_debug() == 0)
+        {
+            printf("error 1: MUL_swd_init_debug()\r\n");        
+            return 0;
+        }
+        
+        osDelay(5);
+        
+        if (swd_freeze_dog() == 0)      /* 如果冻结看门狗时钟失败（STM32H7）*/
+        {
+            if (MUL_swd_get_target_reset() == 0)
+            {
+                MUL_swd_set_target_reset(1);    /* 硬件复位 */ 
+                osDelay(g_tProg.SwdResetDelay);
+            }
+            
+            if (MUL_swd_init_debug() == 0)
+            {
+                printf("error 2: MUL_swd_init_debug()\r\n");
+                return 0;
+            }
+            
+            if (swd_freeze_dog() == 0) 
+            {
+                /* 失败 */;
+            }   
+        }
+
+        // Enable debug and halt the core (DHCSR <- 0xA05F0003)
+        for (i = 0; i < 10; i++)
+        {
+            if (MUL_swd_write_word(DBG_HCSR, DBGKEY | C_DEBUGEN | C_HALT) != 0)
+            {
+                break;
+            }
+            // Target is in invalid state?
+            MUL_swd_set_target_reset(1);
+            osDelay(20);
+            MUL_swd_set_target_reset(0);
+            osDelay(i * 5);                
+        }
+        if (i == 10)
+        {
+            printf("error 3: MUL_swd_write_word(DBG_HCSR, DBGKEY | C_DEBUGEN | C_HALT)\r\n");
+            return 0;
+        }    
+
+        // Enable halt on reset
+        if (!MUL_swd_write_word(DBG_EMCR, VC_CORERESET)) {
+            printf("error 4: MUL_swd_write_word(DBG_EMCR, VC_CORERESET)\r\n");
+            return 0;   /* 超时 */
+        }
+        
+        MUL_swd_read_word(DBG_HCSR, val);
+        if ((val[0] & S_HALT) == 0)
+        {
+            if (MUL_swd_get_target_reset() == 0)
+            {
+                MUL_swd_set_target_reset(1);    /* 硬件复位 */ 
+                osDelay(20);
+            }
+            
+            if (MUL_swd_get_target_reset() == 1)
+            {
+                MUL_swd_set_target_reset(0);    /* 退出硬件复位 */ 
+                osDelay(g_tProg.SwdResetDelay);
+            }
+        }
+
+        // Wait until core is halted
+        for (i = 0; i < 1000; i++)
+        {
+            uint8_t err;
+            
+            if (!MUL_swd_read_word(DBG_HCSR, val)) 
+            {
+                printf("error 5: MUL_swd_read_word(DBG_HCSR, val)\r\n");
+                return 0;
+            }
+            
+            err = 0;
+            if (g_gMulSwd.Active[0] == 1 && ((val[0] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[1] == 1 && ((val[1] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[2] == 1 && ((val[2] & S_HALT) == 0))
+            {
+                err = 1;
+            }
+            if (g_gMulSwd.Active[3] == 1 && ((val[3] & S_HALT) == 0))
+            {
+                err = 1;
+            }   
+            
+            if (err == 0)
+            {
+                break;
+            }
+            
+            bsp_DelayUS(1000);
+        }
+        if (i == 1000)
+        {
+            printf("error 6: MUL_swd_read_word(DBG_HCSR, val)\r\n");
+            return 0;
+        }  
+
+        // Disable halt on reset
+        if (!MUL_swd_write_word(DBG_EMCR, 0)) 
+        {
+            printf("error 7: MUL_swd_write_word(DBG_EMCR, 0)\r\n");
+            return 0;
+        }
+        
+        /* 解锁后重读 NVIC_CPUID */
+        {
+            uint32_t cpuid[4];
+            
+            /* NVIC_CPUID = 0xE000ED00 */
+            if (!MUL_swd_read_word(NVIC_CPUID, cpuid))
+            {
+                printf(".MUL_swd_read_word(NVIC_CPUID, cpuid) error\r\n");
+                return 0;             
+            }
+            
+            if (g_gMulSwd.MultiMode >= 1)
+            {
+                printf(".NVIC_CPUID1 = %08X, %s\r\n", cpuid[0], swd_arm_core_info(cpuid[0]));
+            }
+            if (g_gMulSwd.MultiMode >= 2)
+            {
+                printf(".NVIC_CPUID2 = %08X, %s\r\n", cpuid[1], swd_arm_core_info(cpuid[1]));
+            }
+            if (g_gMulSwd.MultiMode >= 3)
+            {
+                printf(".NVIC_CPUID3 = %08X, %s\r\n", cpuid[2], swd_arm_core_info(cpuid[2]));
+            }
+            if (g_gMulSwd.MultiMode >= 4)
+            {                
+                printf(".NVIC_CPUID4 = %08X, %s\r\n", cpuid[3], swd_arm_core_info(cpuid[3]));
+            }
+            {
+                uint8_t err = 0;
+                
+                for (i = 0; i < 4; i++)
+                {
+                    if (g_gMulSwd.Active[i] == 1)
+                    {
+                        if ((cpuid[i] & 0xFF000000) != 0x41000000)
+                        {
+                            err = 1;
+                        }
+                    }
+                }
+                
+                if (err == 1)
+                {
+                    ;
+                }
+            }
+        }     
+        return 1;
+    }
+    
+    return 0;
 }
 #endif

@@ -42,14 +42,21 @@ ip_addr_t destAddr;
 static uint8_t udp_print_buf[PRINT_FIFO_SIZE];
 static uint16_t udp_print_putp = 0;
 static uint16_t udp_print_getp = 0;
+static uint16_t udp_print_count = 0;
 
 void udp_print_put(uint8_t ch)
-{
+{ 
+//    while (udp_print_count == PRINT_FIFO_SIZE - 1)
+//    {
+//        bsp_Idle();
+//    }
+    
     udp_print_buf[udp_print_putp] = ch;
     if (++udp_print_putp >= PRINT_FIFO_SIZE)
     {
         udp_print_putp = 0;
     }
+    udp_print_count++;
 }
 
 uint8_t udp_print_get(uint8_t *ch)
@@ -64,6 +71,11 @@ uint8_t udp_print_get(uint8_t *ch)
             udp_print_getp = 0;
         }
         *ch = data;
+        
+        if (udp_print_count > 0)
+        {
+            udp_print_count--;
+        }
         return 1;
     }
     return 0;
@@ -98,12 +110,14 @@ void udp_print_send(void)
     p_udp_tx->tot_len = len;
 
     udp_sendto(g_udp_pcb, p_udp_tx, &destAddr, LUA_UDP_PORT); /* 数据发送出去 */
+    
+    //ERR_OK
 }
 
 /*
 *********************************************************************************************************
 *    函 数 名: udp_SendBuf
-*    功能说明: 发送UDP数据包，用于lua. 先缓存再发送. 5ms超时汇总后集中发送
+*    功能说明: 发送UDP数据包，用于lua. 先缓存再发送.超时汇总后集中发送
 *    形    参: 无
 *    返 回 值: 无
 *********************************************************************************************************
@@ -116,7 +130,7 @@ void lua_udp_SendBuf(uint8_t *_buf, uint16_t _len, uint16_t _port)
     {
         udp_print_put(_buf[i]);
     }
-    bsp_StartHardTimer(1, 5, udp_print_send);
+    bsp_StartHardTimer(3, 5, udp_print_send);
 }
 
 /*

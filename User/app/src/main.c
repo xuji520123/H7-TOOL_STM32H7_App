@@ -31,7 +31,8 @@
 #include "status_extend_menu.h"
 #include "status_mini_dso.h"
 #include "status_lua.h"
-
+#include "status_can_monitor.h"
+#include "status_uart_monitor.h"
 #include "wifi_if.h"
 #include "ff.h"
 #include "ff_gen_drv.h"
@@ -151,9 +152,19 @@ int main(void)
     lua_Init();         /* 启动lua */
     
     //wifi_state = WIFI_INIT;
-
+  
     /* 主程序采用状态机实现程序功能切换 */
     g_MainStatus = MS_LINK_MODE; /* 初始状态 = 联机界面 */
+    if (g_tParam.StartRun == 1)
+    {
+        g_gMulSwd.MultiMode = 0;        /* 单路烧录 */
+        g_MainStatus = MS_PROG_WORK;
+    }
+    else if (g_tParam.StartRun == 2)
+    {
+        g_gMulSwd.MultiMode = g_tParam.MultiProgMode; 
+        g_MainStatus = MS_PROG_WORK;    /* 多路烧录 */
+    }    
     while (1)
     {
         switch (g_MainStatus)
@@ -244,6 +255,22 @@ int main(void)
             
             case MS_LUA_EXEC_FILE:  /* lua执行状态 */    
                 status_LuaRun();
+                break;
+            
+            case MS_MONITOR_UART:   /* 串口监视 */
+                status_MonitorUart();
+                break;
+
+            case MS_MONITOR_CAN:    /* CAN监视 */
+                status_MonitorCan();
+                break;
+            
+            case MS_MONITOR_GPIO:   /* IO监视器 */
+                status_MonitorUart();
+                break;
+            
+            case MS_MONITOR_ANALOG: /* 模拟量监视器 */              
+                status_MonitorUart();
                 break;
             
             default:

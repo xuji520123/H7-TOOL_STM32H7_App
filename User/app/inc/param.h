@@ -17,7 +17,7 @@
 #define PARAM_ADDR          0           /* 基本参数区地址 */
 #define PARAM_SIZE          256         /* 最大空间，用于编译查错 */
 
-#define PARAM_CALIB_ADDR    1024        /* 基本参数区地址 */
+#define PARAM_CALIB_ADDR    1024        /* 校准参数区地址 */
 #define PARAM_CALIB_SIZE    512         /* 最大空间，用于编译查错 */
 
 #define PARAM_VER           0x00000101  /* 基本参数版本 100 */
@@ -101,8 +101,23 @@ typedef struct
     
     uint8_t FileListFont24;     /* 1表示24点阵显示文件列表，0表示16点阵 */
     
-    uint8_t ResetType;          /* 0表示由lua脚本决定  1表示强制硬件复位 2表示强制软件复位 */
+    uint8_t ResetTypeNotUsed;	/* 0表示由lua脚本决定  1表示强制硬件复位 2表示强制软件复位 */
     uint8_t MultiProgMode;      /* 1表示1路，2表示2路，3表示3路，4表示4路 */
+    
+	uint16_t FactoryId;         /* 工厂代码 */
+    uint16_t ToolSn;          	/* 烧录器编号 */
+    
+    uint8_t StartRun;           /* 开机启动，0表示缺省，1表示单机烧录 2表示多路烧录 */
+
+    /* V1.32 */
+    uint8_t UartMonBaud;        /* 串口监视，波特率 */
+    uint8_t UartMonParit;       /* 串口监视，奇偶校验 */
+    uint8_t UartMonWordWrap;    /* 串口监视，自动换行 */    
+    uint8_t UartMonFont;        /* 串口监视，字体 */
+    uint8_t UartMonHex;         /* 串口监视，按HEX显示 */
+    uint8_t UartMonTimeStamp;   /* 串口监视，加上时间戳 */
+    uint8_t UartMonProxy;       /* 串口监视，协议 */
+    
 } PARAM_T;
 
 /* 模拟量校准参数 */
