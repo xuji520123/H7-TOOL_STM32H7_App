@@ -37,7 +37,7 @@ extern const program_target_t flash_algo;
 *               _FlashAddr : flash起始地址
 *               _EndAddr : flash结束地址
 *               _CtrlByte : 控制字节，bit0 = 1表示 滚码UID加密在本次编程中写入
-*               _FileIndex : 文件编号（1-10）
+*               _FileIndex : 文件编号（1-10）,用于滚码UID加密
 *    返 回 值: 0 = ok, 其他表示错误
 *********************************************************************************************************
 */
@@ -399,6 +399,10 @@ uint16_t PG_SWIM_ProgFile(char *_Path, uint32_t _FlashAddr, uint32_t _EndAddr, u
         }
     } 
 quit:
+    if (g_gMulSwd.MultiMode == 0)
+    {
+        g_gMulSwd.Error[0] = err;   /* 单路模式，借用该变量用于机台信号lua程序用 */
+    }    
     return err;
 }
 

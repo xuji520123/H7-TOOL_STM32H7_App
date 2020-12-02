@@ -14,6 +14,15 @@
 #ifndef _MODIFY_PARAM_H
 #define _MODIFY_PARAM_H
 
+/* 修改参数的界面ID */
+enum
+{
+    MODIFY_PARAM_UART_MON = 0,        /* 串口监视 */
+    MODIFY_PARAM_SYSTEM,              /* 系统参数 */
+    MODIFY_PARAM_NET,                 /* 网络参数 */
+    MODIFY_PARAM_PROG,                /* 脱机烧录器参数 */
+};
+
 /* 参数列表结构 */
 typedef struct
 {    
@@ -25,6 +34,7 @@ typedef struct
     int32_t DefaultValue;   /* 缺省值 */ 
 }PARAM_LIST_T;
 
+void UartMonInitParam(uint16_t _MainStatus);
 void ModifyParam(uint16_t _MainStatus);
 void UartMonCheckParam(void);
 

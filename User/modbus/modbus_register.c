@@ -42,40 +42,48 @@ uint8_t ReadRegValue_03H(uint16_t reg_addr, uint16_t *reg_value)
     {
         case REG03_NET_CPU_ID0: /* MCU序号（只读） */
         case REG03_DEV_ID0:
+        case REG03_BOOT_CPU_ID0:           
             value = g_tVar.CPU_Sn[0];
             break;
 
         case REG03_NET_CPU_ID1:
         case REG03_DEV_ID1:
+        case REG03_BOOT_CPU_ID1:
             value = g_tVar.CPU_Sn[0] >> 16;
             break;
 
         case REG03_NET_CPU_ID2:
         case REG03_DEV_ID2:
+        case REG03_BOOT_CPU_ID2:
             value = g_tVar.CPU_Sn[1];
             break;
 
         case REG03_NET_CPU_ID3:
         case REG03_DEV_ID3:
+        case REG03_BOOT_CPU_ID3:
             value = g_tVar.CPU_Sn[1] >> 16;
             break;
 
         case REG03_NET_CPU_ID4:
         case REG03_DEV_ID4:
+        case REG03_BOOT_CPU_ID4:            
             value = g_tVar.CPU_Sn[2];
             break;
 
         case REG03_NET_CPU_ID5:
         case REG03_DEV_ID5:
+        case REG03_BOOT_CPU_ID5:            
             value = g_tVar.CPU_Sn[2] >> 16;
             break;
 
         case REG03_NET_HARD_VER:
         case REG03_HARD_MODEL:
+        case REG03_BOOT_HARD_VER:
             value = HARD_MODEL;
             break;
 
         case REG03_BOOT_VER:
+        case REG03_BOOT_SOFT_VER:
             value = BOOT_VERSION;
             break;
 
@@ -1542,15 +1550,15 @@ uint8_t WriteRegValue_06H(uint16_t reg_addr, uint16_t reg_value)
             {
                 lua_do("init()");
             }
-            else if (reg_value == 3)
-            {
-                lua_66H_Write(0, "123", 3);
-            }
-            else if (reg_value == 4)
-            {
-                //luaL_dostring(g_Lua, "read()");
-                lua_67H_Read(0, s_lua_read_buf, 3);
-            }
+//            else if (reg_value == 3)
+//            {
+//                lua_66H_Write(0, "123", 3);
+//            }
+//            else if (reg_value == 4)
+//            {
+//                //luaL_dostring(g_Lua, "read()");
+//                lua_67H_Read(0, s_lua_read_buf, 3);
+//            }
             break;
 
         case REG03_CALIB_KEY: /* 校准参数写入使能控制 */
